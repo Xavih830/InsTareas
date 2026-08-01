@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync": "node src/index.js"
+    "sync": "node --experimental-strip-types src/index.js"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "prisma": "^7.9.1",
     "web-push": "^3.6.7"

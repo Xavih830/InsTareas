@@ -45,6 +45,7 @@ docs/
 
 # Cliente Prisma generado (se regenera con `prisma generate` en postinstall/CI)
 src/generated/
+worker/generated/
 
 # Editor e IDE
 .vscode/

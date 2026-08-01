@@ -4,6 +4,12 @@ generator client {
   importFileExtension = "ts"
 }
 
+generator worker {
+  provider            = "prisma-client"
+  output              = "../worker/generated/prisma"
+  importFileExtension = "ts"
+}
+
 datasource db {
   provider = "postgresql"
 }

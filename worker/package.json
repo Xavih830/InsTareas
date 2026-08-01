@@ -1,0 +1,14 @@
+{
+  "name": "instareas-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node src/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.9.1",
+    "prisma": "^7.9.1",
+    "web-push": "^3.6.7"
+  }
+}

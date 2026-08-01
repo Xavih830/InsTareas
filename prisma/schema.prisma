@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Importance {
+  BAJA
+  MEDIA
+  ALTA
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADA
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String?
+  espolUsername  String
+  espolPassword  String? // cifrado con AES-256-GCM, nunca en texto plano
+  espolToken     String? // Personal Access Token de Canvas, cifrado
+  requiresReauth Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  tasks          Task[]
+  syncLogs       SyncLog[]
+  subscriptions  Subscription[]
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id])
+  externalId    String // id nativo de Canvas, para deduplicar en cada sync
+  title         String
+  course        String
+  dueDate       DateTime
+  description   String?
+  sourceUrl     String?
+  importance    Importance @default(MEDIA)
+  priorityScore Float      @default(0)
+  status        TaskStatus @default(PENDIENTE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([userId, externalId])
+  @@index([userId, status, priorityScore])
+}
+
+model SyncLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  runAt      DateTime @default(now())
+  success    Boolean
+  tasksFound Int
+  error      String?
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}

@@ -73,8 +73,10 @@ export function icsToTask(event, courses) {
   const assignmentMatch = uid.match(/event-assignment-(\d+)/);
   const externalId = assignmentMatch ? `assign-${assignmentMatch[1]}` : `evt-${uid}`;
 
+  const urlProp = firstProp(event, "URL")?.value || "";
+  const courseFromUrl = urlProp.match(/include_contexts=course_(\d+)/);
   const courseLink = (descriptionText || "").match(/courses\/(\d+)/);
-  const courseId = courseLink ? courseLink[1] : null;
+  const courseId = courseFromUrl?.[1] || courseLink?.[1] || null;
   const courseName = courseId ? (courses.get(courseId) || courseId) : "Sin curso";
 
   const sourceUrl =

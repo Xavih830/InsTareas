@@ -1,6 +1,6 @@
 import { format, formatDistanceToNowStrict, isPast } from "date-fns";
 import { es } from "date-fns/locale";
-import { CheckCircle2, Circle, Clock } from "lucide-react";
+import { CheckCircle2, Circle, Clock, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { TaskDTO } from "./types";
@@ -66,9 +66,24 @@ export function TaskCard({
           <p className={cn("text-[15px] font-medium leading-snug", completed && "line-through")}>
             {task.title}
           </p>
-          <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-            {task.importance === "ALTA" ? "Alta" : task.importance === "MEDIA" ? "Media" : "Baja"}
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+              {task.importance === "ALTA" ? "Alta" : task.importance === "MEDIA" ? "Media" : "Baja"}
+            </span>
+            {task.sourceUrl && (
+              <a
+                href={task.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Abrir en el aula virtual"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/70"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Aula
+              </a>
+            )}
+          </div>
         </div>
         <p className="mt-1 truncate text-sm text-muted-foreground">{task.course}</p>
         <p

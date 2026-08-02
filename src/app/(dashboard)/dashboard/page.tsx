@@ -7,6 +7,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { CommandPalette } from "@/components/command-palette";
 import { TaskList } from "@/features/tasks/task-list";
 import { CalendarView } from "@/features/calendar/calendar-view";
+import { CalendarSubscribeButton } from "@/features/calendar/calendar-subscribe-button";
 import { SyncButton } from "@/features/scraper-status/sync-button";
 import type { TaskDTO } from "@/features/tasks/types";
 
@@ -65,7 +66,10 @@ export default async function DashboardPage() {
         )}
 
         <section className="mt-10">
-          <h2 className="mb-3 text-lg font-semibold tracking-tight">Calendario</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">Calendario</h2>
+            <CalendarSubscribeButton userId={session.userId} />
+          </div>
           <CalendarView tasks={dto} />
         </section>
       </main>

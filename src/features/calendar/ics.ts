@@ -23,16 +23,24 @@ export function toIcs(tasks: TaskDTO[], now = new Date()): string {
 
   for (const task of tasks) {
     if (task.status === "COMPLETADA") continue;
+    const descParts = [task.course, task.description].filter(Boolean);
     lines.push(
       "BEGIN:VEVENT",
       `UID:${task.id}@instareas`,
       `DTSTAMP:${formatIcalDate(now)}`,
       `DTSTART:${formatIcalDate(new Date(task.dueDate))}`,
       `SUMMARY:${esc(task.title)}`,
-      `DESCRIPTION:${esc(task.course)}`
+      `DESCRIPTION:${esc(descParts.join("\\n\\n"))}`
     );
     if (task.sourceUrl) lines.push(`URL:${esc(task.sourceUrl)}`);
-    lines.push("END:VEVENT");
+    lines.push(
+      "BEGIN:VALARM",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:Recordatorio de tarea",
+      "TRIGGER:-PT12H",
+      "END:VALARM",
+      "END:VEVENT"
+    );
   }
 
   lines.push("END:VCALENDAR");

@@ -24,6 +24,38 @@ export async function notifyNewTasks(userId, tasks) {
     url: "/dashboard",
   });
 
+  await sendSubscriptions(subs, payload);
+}
+
+export async function sendDailyDigest(userId, { urgent, later }) {
+  if (!setup()) return;
+  const subs = await prisma.subscription.findMany({ where: { userId } });
+  if (subs.length === 0) return;
+
+  const line = (t) => `• ${t.title} (${formatDue(t.dueDate)})`;
+  const body = [
+    urgent.length > 0 ? `Entrega en ≤3 días (${urgent.length}):\n${urgent.slice(0, 4).map(line).join("\n")}` : "No hay tareas con entrega ≤3 días.",
+    later.length > 0 ? `\nPróximas (${later.length}):\n${later.slice(0, 4).map(line).join("\n")}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const payload = JSON.stringify({
+    title: "Tus tareas de hoy",
+    body,
+    url: "/dashboard",
+  });
+  await sendSubscriptions(subs, payload);
+}
+
+function formatDue(dueDate) {
+  const d = new Date(dueDate);
+  const hours = (d.getTime() - Date.now()) / 36e5;
+  if (hours < 24) return `${Math.max(1, Math.round(hours))}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+async function sendSubscriptions(subs, payload) {
   for (const sub of subs) {
     try {
       await webpush.sendNotification(

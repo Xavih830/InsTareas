@@ -35,6 +35,7 @@ model User {
   espolToken     String? // Personal Access Token de Canvas, cifrado
   calendarFeedUrl String? // feed ICS del calendario de Canvas (user_<token>.ics), cifrado
   courseNames    Json? // mapa { course_id: nombre }, persistido de sincronizaciones con token
+  lastDigestAt   DateTime? // fecha local del último recordatorio diario enviado (una vez por día)
   requiresReauth Boolean  @default(false)
   createdAt      DateTime @default(now())
   tasks          Task[]

@@ -29,6 +29,7 @@ export function CalendarView({ tasks }: { tasks: TaskDTO[] }) {
   const byDay = useMemo(() => {
     const map = new Map<string, TaskDTO[]>();
     for (const t of tasks) {
+      if (t.status === "COMPLETADA") continue;
       const key = format(new Date(t.dueDate), "yyyy-MM-dd");
       map.set(key, [...(map.get(key) ?? []), t]);
     }

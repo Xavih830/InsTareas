@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { sortByPriority } from "@/lib/priority";
 import { AppHeader } from "@/components/app-header";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { CommandPalette } from "@/components/command-palette";
 import { TaskList } from "@/features/tasks/task-list";
 import { CalendarView } from "@/features/calendar/calendar-view";
@@ -38,6 +39,7 @@ export default async function DashboardPage() {
   return (
     <>
       <AppHeader />
+      <AutoRefresh />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
         <section className="mb-6 flex flex-col gap-1">
           <h1 className="text-3xl font-semibold tracking-tight">Tus tareas</h1>

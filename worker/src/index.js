@@ -10,27 +10,11 @@ import {
   priorityScore,
   toTask,
 } from "./scraper/canvas.js";
+import { icsToTask, parseCalendarFeed } from "./scraper/ics.js";
 
 const MAX_FAILED_ATTEMPTS = 3;
 
-async function syncUser(user) {
-  const token = decryptSecret(user.espolToken);
-  if (!token) {
-    throw new Error("El usuario no tiene token de Canvas configurado");
-  }
-
-  const events = await getUpcomingEvents(token);
-  const courses = await getCourses(token);
-  const futureAssignments = await getFutureAssignments(token, courses);
-
-  const tasks = mergeEvents(events, futureAssignments)
-    .map((e) => toTask(e, courses))
-    .filter(Boolean)
-    .map((t) => ({
-      ...t,
-      priorityScore: priorityScore(t.dueDate, t.importance, "PENDIENTE"),
-    }));
-
+async function persistTasks(user, tasks) {
   const newTasks = [];
   for (const t of tasks) {
     const existing = await prisma.task.findUnique({
@@ -78,9 +62,81 @@ async function syncUser(user) {
   return { found: tasks.length, completed: completed.count };
 }
 
+async function syncUserViaToken(user) {
+  const token = decryptSecret(user.espolToken);
+  if (!token) {
+    throw new Error("El usuario no tiene token de Canvas configurado");
+  }
+
+  const events = await getUpcomingEvents(token);
+  const courses = await getCourses(token);
+  const futureAssignments = await getFutureAssignments(token, courses);
+
+  if (courses.size > 0) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { courseNames: Object.fromEntries(courses) },
+    });
+  }
+
+  const tasks = mergeEvents(events, futureAssignments)
+    .map((e) => toTask(e, courses))
+    .filter(Boolean)
+    .map((t) => ({
+      ...t,
+      priorityScore: priorityScore(t.dueDate, t.importance, "PENDIENTE"),
+    }));
+
+  return { tasks, source: "api" };
+}
+
+async function syncUserViaFeed(user) {
+  if (!user.calendarFeedUrl) {
+    throw new Error("El usuario no tiene feed de calendario configurado");
+  }
+  const feedUrl = decryptSecret(user.calendarFeedUrl);
+  const res = await fetch(feedUrl);
+  if (!res.ok) {
+    throw new Error(`Feed de calendario ${res.status}`);
+  }
+  const feed = parseCalendarFeed(await res.text());
+  const courses = new Map();
+  if (user.courseNames) {
+    for (const [id, name] of Object.entries(user.courseNames)) courses.set(id, name);
+  }
+  const now = Date.now();
+  const tasks = feed
+    .map((e) => icsToTask(e, courses))
+    .filter(Boolean)
+    .filter((t) => t.dueDate.getTime() >= now)
+    .map((t) => ({
+      ...t,
+      priorityScore: priorityScore(t.dueDate, t.importance, "PENDIENTE"),
+    }));
+
+  return { tasks, source: "ics" };
+}
+
+async function syncUser(user) {
+  if (user.espolToken) {
+    try {
+      return await syncUserViaToken(user);
+    } catch (err) {
+      if (err instanceof CanvasAuthError && user.calendarFeedUrl) {
+        console.log(`  fallback a feed ICS para ${user.email}`);
+        return await syncUserViaFeed(user);
+      }
+      throw err;
+    }
+  }
+  return syncUserViaFeed(user);
+}
+
 async function main() {
   const users = await prisma.user.findMany({
-    where: { requiresReauth: false },
+    where: {
+      OR: [{ requiresReauth: false }, { calendarFeedUrl: { not: null } }],
+    },
   });
 
   if (users.length === 0) {
@@ -98,11 +154,18 @@ async function main() {
   for (const user of users) {
     let attempts = 0;
     try {
-      const result = await syncUser(user);
+      const sync = await syncUser(user);
+      const persisted = await persistTasks(user, sync.tasks);
       await prisma.syncLog.create({
-        data: { userId: user.id, success: true, tasksFound: result.found },
+        data: { userId: user.id, success: true, tasksFound: sync.tasks.length },
       });
-      console.log(`OK ${user.email}: ${result.found} tareas`);
+      if (user.requiresReauth) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { requiresReauth: false },
+        });
+      }
+      console.log(`OK ${user.email} (${sync.source}): ${sync.tasks.length} tareas, ${persisted.completed} completadas`);
     } catch (err) {
       attempts++;
       const isAuth = err instanceof CanvasAuthError;

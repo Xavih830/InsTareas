@@ -33,6 +33,8 @@ model User {
   espolUsername  String
   espolPassword  String? // cifrado con AES-256-GCM, nunca en texto plano
   espolToken     String? // Personal Access Token de Canvas, cifrado
+  calendarFeedUrl String? // feed ICS del calendario de Canvas (user_<token>.ics), cifrado
+  courseNames    Json? // mapa { course_id: nombre }, persistido de sincronizaciones con token
   requiresReauth Boolean  @default(false)
   createdAt      DateTime @default(now())
   tasks          Task[]

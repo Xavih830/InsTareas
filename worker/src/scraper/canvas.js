@@ -22,6 +22,17 @@ export async function getUpcomingEvents(token) {
   return canvasApi("/users/self/upcoming_events", token);
 }
 
+export async function getFutureAssignments(token, courses) {
+  const all = [];
+  for (const courseId of courses.keys()) {
+    const assignments = await canvasApi(`/courses/${courseId}/assignments?bucket=future`, token);
+    for (const a of assignments) {
+      if (a.id != null && a.due_at) all.push(a);
+    }
+  }
+  return all;
+}
+
 export async function getCourses(token) {
   const courses = await canvasApi("/courses?enrollment_state=active", token);
   const map = new Map();
@@ -29,6 +40,21 @@ export async function getCourses(token) {
     if (c.id && c.name) map.set(String(c.id), c.name);
   }
   return map;
+}
+
+// Combina eventos de upcoming_events (ventana corta) con asignaciones
+// futuras por curso (horizonte completo), deduplicando por id de assignment.
+export function mergeEvents(upcoming, assignments) {
+  const seen = new Set();
+  const merged = [];
+  for (const e of [...upcoming, ...assignments]) {
+    const a = e.assignment ?? e;
+    const key = a.id ?? e.id;
+    if (key == null || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(e);
+  }
+  return merged;
 }
 
 export function inferImportance(title) {
@@ -47,18 +73,21 @@ export function inferImportance(title) {
 }
 
 export function toTask(event, courses) {
-  const assignment = event.assignment;
-  const title = assignment?.name || event.title || "Sin título";
-  const dueDate = assignment?.due_at || event.start_at;
+  const a = event.assignment ?? event;
+  const title = a.name || event.title || "Sin título";
+  const dueDate = a.due_at || event.start_at;
   if (!dueDate) return null;
 
   return {
-    externalId: assignment ? `assign-${assignment.id}` : `evt-${event.id}`,
+    externalId: a.id != null ? `assign-${a.id}` : `evt-${event.id}`,
     title,
-    course: courses.get(String(event.course_id)) || "Sin curso",
+    course:
+      courses.get(String(a.course_id ?? event.course_id)) ||
+      event.context_name ||
+      "Sin curso",
     dueDate: new Date(dueDate),
-    description: assignment?.description ? stripHtml(assignment.description) : null,
-    sourceUrl: assignment?.html_url || event.html_url || null,
+    description: a.description ? stripHtml(a.description) : null,
+    sourceUrl: a.html_url || event.html_url || null,
     importance: inferImportance(title),
   };
 }

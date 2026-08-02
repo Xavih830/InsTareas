@@ -1,7 +1,15 @@
 import { prisma } from "./db.js";
 import { decryptSecret } from "./crypto.js";
 import { notifyNewTasks } from "./push.js";
-import { CanvasAuthError, getCourses, getUpcomingEvents, priorityScore, toTask } from "./scraper/canvas.js";
+import {
+  CanvasAuthError,
+  getCourses,
+  getFutureAssignments,
+  getUpcomingEvents,
+  mergeEvents,
+  priorityScore,
+  toTask,
+} from "./scraper/canvas.js";
 
 const MAX_FAILED_ATTEMPTS = 3;
 
@@ -13,8 +21,9 @@ async function syncUser(user) {
 
   const events = await getUpcomingEvents(token);
   const courses = await getCourses(token);
+  const futureAssignments = await getFutureAssignments(token, courses);
 
-  const tasks = events
+  const tasks = mergeEvents(events, futureAssignments)
     .map((e) => toTask(e, courses))
     .filter(Boolean)
     .map((t) => ({
@@ -73,6 +82,17 @@ async function main() {
   const users = await prisma.user.findMany({
     where: { requiresReauth: false },
   });
+
+  if (users.length === 0) {
+    const totalUsers = await prisma.user.count();
+    await prisma.$disconnect();
+    if (totalUsers > 0) {
+      console.error("Todos los usuarios requieren reautenticación; nada que sincronizar");
+      process.exit(1);
+    }
+    console.log("Sin usuarios registrados; nada que sincronizar");
+    return;
+  }
 
   let anyFailed = false;
   for (const user of users) {

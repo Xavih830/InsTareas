@@ -13,11 +13,12 @@ function dueLabel(dueDate: string) {
       past: true,
     };
   }
-  const inDays = formatDistanceToNowStrict(d, { locale: es, unit: "day" });
-  if (inDays === "0 días") {
+  const hours = (d.getTime() - Date.now()) / 36e5;
+  if (hours < 24) {
     return { text: `Hoy · ${format(d, "HH:mm")}`, past: false };
   }
-  return { text: `En ${inDays} · ${format(d, "d MMM, HH:mm", { locale: es })}`, past: false };
+  const days = Math.ceil(hours / 24);
+  return { text: `En ${days} ${days === 1 ? "día" : "días"} · ${format(d, "d MMM, HH:mm", { locale: es })}`, past: false };
 }
 
 export function TaskCard({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { es } from "date-fns/locale";
 import { RefreshCw } from "lucide-react";
@@ -14,6 +14,11 @@ export function SyncButton({ lastRunAt, lastSuccess }: {
 }) {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   async function onSync() {
     setSyncing(true);
@@ -35,7 +40,7 @@ export function SyncButton({ lastRunAt, lastSuccess }: {
             <>
               Última sincronización:{" "}
               <span className={cn("font-medium", lastSuccess ? "text-foreground" : "text-destructive")}>
-                {formatDistanceToNowStrict(new Date(lastRunAt), { locale: es, addSuffix: true })}
+                {mounted && formatDistanceToNowStrict(new Date(lastRunAt), { locale: es, addSuffix: true })}
               </span>
             </>
           ) : (

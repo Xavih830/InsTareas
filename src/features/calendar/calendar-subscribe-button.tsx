@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore, useState } from "react";
 import { CalendarDays, Check, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { calendarFeedUrl, isLocalHost } from "@/lib/calendar-url";
 
 function isAppleDevice() {
+  if (typeof navigator === "undefined") return false;
   return /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 }
 
@@ -13,7 +14,16 @@ export function CalendarSubscribeButton({ userId }: { userId: string }) {
   const [copied, setCopied] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
-  const local = isLocalHost();
+  // SSR/prerender: `isLocalHost()` devuelve false en el servidor; durante la
+  // hidratación el texto del botón depende de `window`, por lo que se espera
+  // el montaje (useSyncExternalStore) antes de decidir el label.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  const local = mounted && isLocalHost();
 
   function onSubscribe() {
     // En localhost los calendarios de terceros (Google, Windows) NO pueden

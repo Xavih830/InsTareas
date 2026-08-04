@@ -18,6 +18,9 @@ export function calendarFeedUrl(userId: string): string {
 }
 
 export function isLocalHost(): boolean {
+  // SSR/prerender: `window` no existe en el servidor; en localhost dev el
+  // server component solo necesita el feed URL, no la detección de entorno.
+  if (typeof window === "undefined") return false;
   const host = window.location.hostname;
   return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
 }

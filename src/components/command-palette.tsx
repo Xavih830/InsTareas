@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import { CalendarDays, Check, ListTodo } from "lucide-react";
 import type { TaskDTO } from "@/features/tasks/types";
+import { calendarFeedUrl } from "@/lib/calendar-url";
 
 export function CommandPalette({ tasks, userId }: { tasks: TaskDTO[]; userId: string }) {
   const [open, setOpen] = useState(false);
@@ -79,7 +80,7 @@ export function CommandPalette({ tasks, userId }: { tasks: TaskDTO[]; userId: st
           <Command.Item
             onSelect={() => {
               setOpen(false);
-              navigator.clipboard?.writeText(`webcal://${window.location.host}/api/calendar/${userId}/ics`);
+              navigator.clipboard?.writeText(calendarFeedUrl(userId));
             }}
             className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm aria-selected:bg-secondary"
           >

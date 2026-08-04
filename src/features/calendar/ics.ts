@@ -24,11 +24,14 @@ export function toIcs(tasks: TaskDTO[], now = new Date()): string {
   for (const task of tasks) {
     if (task.status === "COMPLETADA") continue;
     const descParts = [task.course, task.description].filter(Boolean);
+    const start = new Date(task.dueDate);
+    const end = new Date(start.getTime() + 3600 * 1000);
     lines.push(
       "BEGIN:VEVENT",
       `UID:${task.id}@instareas`,
       `DTSTAMP:${formatIcalDate(now)}`,
-      `DTSTART:${formatIcalDate(new Date(task.dueDate))}`,
+      `DTSTART:${formatIcalDate(start)}`,
+      `DTEND:${formatIcalDate(end)}`,
       `SUMMARY:${esc(task.title)}`,
       `DESCRIPTION:${esc(descParts.join("\\n\\n"))}`
     );

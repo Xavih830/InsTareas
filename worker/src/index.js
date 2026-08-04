@@ -75,20 +75,15 @@ async function persistTasks(user, tasks) {
     });
   }
 
-  const pendingIds = tasks.map((t) => t.externalId);
-  const completed = await prisma.task.updateMany({
-    where: {
-      userId: user.id,
-      status: { not: "COMPLETADA" },
-      externalId: { notIn: pendingIds },
-      dueDate: { lt: new Date() },
-    },
-    data: { status: "COMPLETADA" },
+  // Quita automáticamente las tareas que ya vencieron: al sincronizar, todo lo
+  // con dueDate en el pasado desaparece de la BD (y del dashboard/calendario).
+  const expired = await prisma.task.deleteMany({
+    where: { userId: user.id, dueDate: { lt: new Date() } },
   });
 
   await notifyNewTasks(user.id, newTasks);
 
-  return { found: tasks.length, completed: completed.count };
+  return { found: tasks.length, removed: expired.count };
 }
 
 async function syncUserViaToken(user) {
@@ -194,7 +189,7 @@ async function main() {
           data: { requiresReauth: false },
         });
       }
-      console.log(`OK ${user.email} (${sync.source}): ${sync.tasks.length} tareas, ${persisted.completed} completadas`);
+      console.log(`OK ${user.email} (${sync.source}): ${sync.tasks.length} tareas, ${persisted.removed} vencidas eliminadas`);
       await maybeSendDailyDigest(user);
     } catch (err) {
       attempts++;

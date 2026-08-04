@@ -16,7 +16,14 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   const [tasks, lastLog] = await Promise.all([
-    db.task.findMany({ where: { userId: session.userId } }),
+    db.task.findMany({
+      where: {
+        userId: session.userId,
+        // Filtro defensivo: nunca mostrar vencidas aunque el worker no haya
+        // corrido (el worker las borra de la BD en cada sync, vía deleteMany).
+        dueDate: { gte: new Date() },
+      },
+    }),
     db.syncLog.findFirst({ where: { userId: session.userId }, orderBy: { runAt: "desc" } }),
   ]);
 

@@ -28,10 +28,15 @@ export async function GET(
     status: t.status,
   }));
 
-  return new NextResponse(toIcs(dto), {
+  const body = toIcs(dto);
+
+  return new NextResponse(body, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'attachment; filename="instareas.ics"',
+      "Content-Length": String(Buffer.byteLength(body)),
+      "Cache-Control": "no-store, max-age=0",
+      Pragma: "no-cache",
     },
   });
 }

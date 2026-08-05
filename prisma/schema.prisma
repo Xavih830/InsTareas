@@ -26,12 +26,18 @@ enum TaskStatus {
   COMPLETADA
 }
 
+enum CalendarProvider {
+  google
+  microsoft
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
   passwordHash   String?
   espolUsername  String
   espolPassword  String? // cifrado con AES-256-GCM, nunca en texto plano
+  espolSession   String? // cookie de sesión de Canvas (headless OIDC), cifrada
   espolToken     String? // Personal Access Token de Canvas, cifrado
   calendarFeedUrl String? // feed ICS del calendario de Canvas (user_<token>.ics), cifrado
   courseNames    Json? // mapa { course_id: nombre }, persistido de sincronizaciones con token
@@ -41,6 +47,8 @@ model User {
   tasks          Task[]
   syncLogs       SyncLog[]
   subscriptions  Subscription[]
+  courses        Course[]
+  calendarConnections CalendarConnection[]
 }
 
 model Task {
@@ -56,11 +64,65 @@ model Task {
   importance    Importance @default(MEDIA)
   priorityScore Float      @default(0)
   status        TaskStatus @default(PENDIENTE)
+  calendarEventId String? // id del evento creado en el calendario externo (Google/Outlook)
+  courseId      String? // vínculo al curso de Canvas si se pudo resolver
+  courseRef     Course?    @relation(fields: [courseId], references: [id])
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   @@unique([userId, externalId])
   @@index([userId, status, priorityScore])
+}
+
+// Curso de Canvas del usuario (para la red de contenido)
+model Course {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  externalId String // id nativo de Canvas
+  name       String
+  code       String?
+  term       String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  tasks      Task[]
+  modules    Module[]
+
+  @@unique([userId, externalId])
+}
+
+// Módulo de un curso de Canvas (estructura mínima, escalable)
+model Module {
+  id         String   @id @default(cuid())
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id])
+  externalId String // id nativo del módulo en Canvas
+  position   Int
+  name       String
+  state      String? // locked | unlocked | started | completed
+  unlockAt   DateTime?
+  prereqIds  Json? // ids de módulos previos requeridos
+  createdAt  DateTime @default(now())
+  items      ModuleItem[]
+
+  @@unique([courseId, externalId])
+}
+
+// Ítem dentro de un módulo (archivo, página, quiz, tarea, URL externa...)
+model ModuleItem {
+  id         String   @id @default(cuid())
+  moduleId   String
+  module     Module   @relation(fields: [moduleId], references: [id])
+  externalId String // id nativo del ítem en Canvas
+  position   Int
+  title      String
+  type       String // Assignment | File | Page | Quiz | ExternalUrl | ...
+  contentId  String? // id del contenido al que apunta
+  url        String?
+  published  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([moduleId, externalId])
 }
 
 model SyncLog {
@@ -70,6 +132,7 @@ model SyncLog {
   runAt      DateTime @default(now())
   success    Boolean
   tasksFound Int
+  scope      String   @default("tasks") // "tasks" | "content"
   error      String?
 }
 
@@ -81,4 +144,19 @@ model Subscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+}
+
+// Conexión a un calendario externo (OAuth de nivel app; el usuario solo se loguea)
+model CalendarConnection {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id])
+  provider     CalendarProvider
+  refreshToken String // token OAuth cifrado con AES-256-GCM
+  accessToken  String? // token temporal cifrado, refrescado por el worker
+  expiresAt    DateTime? // expiración del accessToken
+  calendarId   String? // id del calendario destino (null = primario)
+  connectedAt  DateTime         @default(now())
+
+  @@unique([userId, provider])
 }

@@ -1,6 +1,8 @@
 import { prisma } from "./db.js";
 import { decryptSecret } from "./crypto.js";
 import { notifyNewTasks, sendDailyDigest } from "./push.js";
+import { syncGoogleCalendar } from "./jobs/calendar-push.js";
+import { closeBrowser, isValidSession, loginWithCredentials } from "./session.js";
 import {
   CanvasAuthError,
   getCourses,
@@ -77,24 +79,52 @@ async function persistTasks(user, tasks) {
 
   // Quita automáticamente las tareas que ya vencieron: al sincronizar, todo lo
   // con dueDate en el pasado desaparece de la BD (y del dashboard/calendario).
+  // Antes de borrar, capturamos los ids de sus eventos en calendarios externos
+  // para que el push de calendario los elimine también (por defecto []).
+  const expiredWithEvents = await prisma.task.findMany({
+    where: { userId: user.id, dueDate: { lt: new Date() }, calendarEventId: { not: null } },
+    select: { id: true, calendarEventId: true, externalId: true },
+  });
+  const expiredEventIds = expiredWithEvents
+    .map((t) => t.calendarEventId)
+    .filter(Boolean);
+
   const expired = await prisma.task.deleteMany({
     where: { userId: user.id, dueDate: { lt: new Date() } },
   });
 
   await notifyNewTasks(user.id, newTasks);
 
-  return { found: tasks.length, removed: expired.count };
+  return { found: tasks.length, removed: expired.count, expiredEventIds };
 }
 
-async function syncUserViaToken(user) {
-  const token = decryptSecret(user.espolToken);
-  if (!token) {
-    throw new Error("El usuario no tiene token de Canvas configurado");
+// Resuelve la credencial preferida para la API de Canvas:
+// 1. Sesión headless guardada (si sigue válida)  2. PAT  3. Login OIDC nuevo
+async function resolveCanvasCred(user) {
+  const sessionCookie = decryptSecret(user.espolSession);
+  if (sessionCookie && (await isValidSession(sessionCookie))) {
+    return { cookie: sessionCookie };
   }
 
-  const events = await getUpcomingEvents(token);
-  const courses = await getCourses(token);
-  const futureAssignments = await getFutureAssignments(token, courses);
+  const token = decryptSecret(user.espolToken);
+  if (token) return token;
+
+  const password = decryptSecret(user.espolPassword);
+  if (user.espolUsername && password) {
+    const cookie = await loginWithCredentials(user.espolUsername, password);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { espolSession: encryptSecret(cookie) },
+    });
+    return { cookie };
+  }
+  return null;
+}
+
+async function syncUserViaToken(user, cred) {
+  const events = await getUpcomingEvents(cred);
+  const courses = await getCourses(cred);
+  const futureAssignments = await getFutureAssignments(cred, courses);
 
   if (courses.size > 0) {
     await prisma.user.update({
@@ -111,7 +141,7 @@ async function syncUserViaToken(user) {
       priorityScore: priorityScore(t.dueDate, t.importance, "PENDIENTE"),
     }));
 
-  return { tasks, source: "api" };
+  return { tasks, source: "api", cred };
 }
 
 async function syncUserViaFeed(user) {
@@ -142,9 +172,10 @@ async function syncUserViaFeed(user) {
 }
 
 async function syncUser(user) {
-  if (user.espolToken) {
+  const cred = await resolveCanvasCred(user);
+  if (cred) {
     try {
-      return await syncUserViaToken(user);
+      return await syncUserViaToken(user, cred);
     } catch (err) {
       if (err instanceof CanvasAuthError && user.calendarFeedUrl) {
         console.log(`  fallback a feed ICS para ${user.email}`);
@@ -180,6 +211,12 @@ async function main() {
     try {
       const sync = await syncUser(user);
       const persisted = await persistTasks(user, sync.tasks);
+      let calendar = null;
+      try {
+        calendar = await syncGoogleCalendar(user.id, persisted.expiredEventIds);
+      } catch (err) {
+        console.error(`CALENDAR FAIL ${user.email}: ${err.message}`);
+      }
       await prisma.syncLog.create({
         data: { userId: user.id, success: true, tasksFound: sync.tasks.length },
       });
@@ -189,12 +226,20 @@ async function main() {
           data: { requiresReauth: false },
         });
       }
-      console.log(`OK ${user.email} (${sync.source}): ${sync.tasks.length} tareas, ${persisted.removed} vencidas eliminadas`);
+      console.log(`OK ${user.email} (${sync.source}): ${sync.tasks.length} tareas, ${persisted.removed} vencidas eliminadas` + (calendar ? `, calendario: ${calendar.inserted} ins / ${calendar.updated} upd / ${calendar.deleted} del` : ""));
       await maybeSendDailyDigest(user);
     } catch (err) {
       attempts++;
       const isAuth = err instanceof CanvasAuthError;
       console.error(`FAIL ${user.email}: ${err.message}`);
+      // Si la sesión guardada era inválida, se descarta para que el próximo
+      // intento haga login OIDC nuevo (si el usuario tiene credenciales).
+      if (isAuth && user.espolSession && !user.espolToken) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { espolSession: null },
+        }).catch(() => {});
+      }
       await prisma.syncLog.create({
         data: {
           userId: user.id,
@@ -214,12 +259,14 @@ async function main() {
     }
   }
 
+  await closeBrowser();
   await prisma.$disconnect();
   if (anyFailed) process.exit(1);
 }
 
 main().catch(async (err) => {
   console.error(err);
+  await closeBrowser();
   await prisma.$disconnect();
   process.exit(1);
 });

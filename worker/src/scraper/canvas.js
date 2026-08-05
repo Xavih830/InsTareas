@@ -1,14 +1,24 @@
 export const CANVAS_BASE_URL =
   process.env.CANVAS_BASE_URL || "https://aulavirtual.espol.edu.ec";
 
-export async function canvasApi(path, token, perPage = 100) {
+// `cred` identifica al usuario en Canvas:
+//   - string: Personal Access Token (Authorization: Bearer)
+//   - { cookie }: par de cookies de sesión headless (Cookie header)
+export function canvasHeaders(cred) {
+  if (typeof cred === "object" && cred?.cookie) {
+    return { Cookie: cred.cookie };
+  }
+  return { Authorization: `Bearer ${cred}` };
+}
+
+export async function canvasApi(path, cred, perPage = 100) {
   const url = new URL(`${CANVAS_BASE_URL}/api/v1${path}`);
   url.searchParams.set("per_page", String(perPage));
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: canvasHeaders(cred),
   });
   if (res.status === 401) {
-    throw new CanvasAuthError("Token de Canvas inválido o revocado (401)");
+    throw new CanvasAuthError("Credenciales de Canvas inválidas o revocadas (401)");
   }
   if (!res.ok) {
     throw new Error(`Canvas API ${res.status} para ${path}`);
@@ -40,6 +50,47 @@ export async function getCourses(token) {
     if (c.id && c.name) map.set(String(c.id), c.name);
   }
   return map;
+}
+
+// Estructura de contenido por curso: módulos con sus ítems. `include[]=items`
+// trae los ítems inline; si Canvas los omite por ser demasiados, se resuelven
+// con el endpoint de items por módulo.
+export async function getCourseModules(courseId, token) {
+  const modules = await canvasApi(
+    `/courses/${courseId}/modules?include[]=items&&include[]=content_details`,
+    token
+  );
+  const result = [];
+  for (const mod of modules) {
+    let items = mod.items ?? [];
+    if (!Array.isArray(items)) items = [];
+    if (items.length === 0) {
+      try {
+        items = await canvasApi(`/courses/${courseId}/modules/${mod.id}/items`, token);
+      } catch {
+        items = [];
+      }
+    }
+    result.push({
+      externalId: String(mod.id),
+      position: mod.position ?? 0,
+      name: mod.name ?? "Módulo sin nombre",
+      state: mod.state ?? null,
+      unlockAt: mod.unlock_at ? new Date(mod.unlock_at) : null,
+      prereqIds: mod.prerequisite_module_ids?.length ? mod.prerequisite_module_ids : null,
+      items: items
+        .map((it) => ({
+          externalId: String(it.id),
+          position: it.position ?? 0,
+          title: it.title ?? "Sin título",
+          type: it.type ?? "ExternalUrl",
+          contentId: it.content_id != null ? String(it.content_id) : null,
+          url: it.html_url ?? it.url ?? null,
+          published: it.published !== false,
+        })),
+    });
+  }
+  return result;
 }
 
 // Combina eventos de upcoming_events (ventana corta) con asignaciones

@@ -2,17 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, LogOut, Search } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { BookOpen, CheckCircle2, Link2, LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { signout } from "@/server/actions/auth";
 import { PushToggle } from "@/components/push-toggle";
 
 export function AppHeader() {
   const [signingOut, setSigningOut] = useState(false);
+  const pathname = usePathname();
 
   function openSearch() {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
   }
+
+  const nav = [
+    { href: "/dashboard", label: "Tareas", icon: CheckCircle2 },
+    { href: "/courses", label: "Cursos", icon: BookOpen },
+    { href: "/connections", label: "Conexiones", icon: Link2 },
+  ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur-xl">
@@ -23,6 +32,27 @@ export function AppHeader() {
           </span>
           <span className="text-[15px] font-semibold tracking-tight">InsTareas</span>
         </Link>
+
+        <nav className="flex items-center gap-1">
+          {nav.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
+                  active
+                    ? "bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
         <div className="flex items-center gap-1">
           <PushToggle />

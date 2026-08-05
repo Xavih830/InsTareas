@@ -1,4 +1,4 @@
-import { createDecipheriv } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 const ALGO = "aes-256-gcm";
 
@@ -6,6 +6,14 @@ function key() {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) throw new Error("ENCRYPTION_KEY no está definida");
   return Buffer.from(raw, "hex");
+}
+
+export function encryptSecret(plain) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGO, key(), iv);
+  const data = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString("base64url"), tag.toString("base64url"), data.toString("base64url")].join(":");
 }
 
 export function decryptSecret(payload) {

@@ -1,0 +1,40 @@
+name: Sincronizar contenido de cursos
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync-content:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: worker
+        run: npx prisma generate
+
+      - name: Install Chromium (login OIDC headless)
+        working-directory: worker
+        run: npx playwright install --with-deps chromium
+
+      - name: Sync course content
+        working-directory: worker
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENABLE_CANVAS_LOGIN: "1"
+        run: npm run sync:content

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { calendarBaseUrl } from "@/lib/calendar-url";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
@@ -15,15 +16,7 @@ export async function GET() {
     );
   }
 
-  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
-  if (!base) {
-    return NextResponse.json(
-      { error: "NEXT_PUBLIC_APP_URL no está configurada" },
-      { status: 500 }
-    );
-  }
-
-  const redirectUri = `${base}/api/calendar-oauth/callback`;
+  const redirectUri = `${calendarBaseUrl(new URL(request.url).origin)}/api/calendar-oauth/callback`;
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -33,6 +26,5 @@ export async function GET() {
     prompt: "consent",
     state: session.userId,
   });
-
   return NextResponse.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { encryptSecret } from "@/lib/crypto";
+import { calendarBaseUrl } from "@/lib/calendar-url";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
@@ -24,12 +25,11 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
-  if (!clientId || !clientSecret || !base) {
+  if (!clientId || !clientSecret) {
     return NextResponse.json({ error: "Configuración de Google incompleta" }, { status: 500 });
   }
 
-  const redirectUri = `${base}/api/calendar-oauth/callback`;
+  const redirectUri = `${calendarBaseUrl(new URL(request.url).origin)}/api/calendar-oauth/callback`;
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -72,5 +72,5 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.redirect("/dashboard?connected=google");
+  return NextResponse.redirect(new URL("/dashboard?connected=google", request.url));
 }

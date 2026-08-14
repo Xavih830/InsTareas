@@ -55,9 +55,10 @@ export async function syncGoogleCalendar(userId, expiredEventIds = []) {
     }
   }
 
-  for (const [eventId] of existingById) {
+  for (const [eventId, ev] of existingById) {
     if (syncedIds.has(eventId)) continue;
     const belongsToApp = expiredEventIds.includes(eventId) ||
+      ev.source?.title === "Ver en Aula Virtual" ||
       (await prisma.task.count({ where: { userId, calendarEventId: eventId } })) > 0;
     if (belongsToApp) {
       await deleteGoogleEvent(connection, calendarId, eventId);
